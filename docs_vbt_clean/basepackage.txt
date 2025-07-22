@@ -1,0 +1,1 @@
+base packageModules with base classes and utilities for pandas objects, such as broadcasting. Sub-modulesvectorbt.base.accessors vectorbt.base.array_wrapper vectorbt.base.column_grouper vectorbt.base.combine_fns vectorbt.base.index_fns vectorbt.base.indexing vectorbt.base.reshape_fns

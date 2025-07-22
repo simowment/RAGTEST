@@ -1,0 +1,1 @@
+random_ moduleUtilities for random number generation. set_seed functionset_seed ( seed ) Set seed. set_seed_nb functionset_seed_nb ( seed ) Set seed in numba.

@@ -1,0 +1,24 @@
+# Core LlamaIndex and specific components
+llama-index-core
+llama-index-llms-openrouter
+llama-index-embeddings-huggingface
+llama-index-vector-stores-chroma
+llama-index-readers-file
+llama-index-postprocessor-cohere-rerank
+
+# API Framework
+fastapi
+uvicorn[standard]
+
+# Vector DB
+chromadb
+
+# Embedding model dependencies
+sentence-transformers
+torch
+huggingface-hub
+
+# Web scraping and environment (used by scripts)
+beautifulsoup4
+requests
+python-dotenv 
