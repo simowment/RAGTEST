@@ -1,0 +1,136 @@
+1. Clean code : Nombres magiques
+Un nombre magique signifie que nous attribuons un nombre sans signification claire. Parfois, nous utilisons une valeur dans un but précis, cependant nous ne l’affectons pas à une variable significative. Le problème est que lorsque quelqu’un travaille avec votre code, il ne connaît pas la signification de cette valeur directe.
+
+Exemple de Clean code – Nombre magiques :
+
+// On remplace la valeur “magique” par une constante bien nommée
+const MAX_LOGIN_ATTEMPTS = 3;
+
+function shouldLockAccount(attempts) {
+return attempts > MAX_LOGIN_ATTEMPTS;
+}
+
+2. Clean code book : L’imbrication profonde
+Parfois, nous intégrons des éléments qui sont difficiles à comprendre. La façon de gérer cela est d’extraire toutes les parties dans des structures séparées.
+
+Supposons que nous ayons un tableau, dans un autre tableau qui contient un autre tableau et dont nous voulions la valeur du dernier tableau. Nous pouvons écrire des éléments qui répondront à nos besoins. Mais ce n’est pas la bonne méthode car peut-être difficiles à comprendre. 
+
+Voici l’exemple ci-dessous avec une fonction qui peut faire la même chose, mais celle-ci est beaucoup plus propre, plus simple, moins répétitive, plus facile à lire et réutilisable.
+
+// On extrait la logique dans une fonction utilitaire
+const getInnermostValue = (nested) => nested.flat(Infinity).pop();
+
+const deeplyNested = [[[42]]];
+const value = getInnermostValue(deeplyNested); // 42
+
+3. Clean code book : Commentaires
+Les commentaires permettent d’aider les gens à mieux comprendre le code plus tard dans le temps, de même manière ils aident d’autres programmeurs à collaborer sur le même projet. Toutefois, les commentaires dans le code désignent peut-être que votre code n’est pas assez clair.
+
+Les commentaires sont une bonne chose, mais votre code doit être assez clair.
+
+Exemple de clean code book – commentaires :
+
+// Les noms parlent d’eux-mêmes : plus besoin de commenter chaque ligne
+for (let orderIndex = 0; orderIndex < orders.length; orderIndex += 1) {
+processOrder(orders[orderIndex]);
+}
+
+4. Clean code principes : Évitez les grosses fonctionnalités
+Lorsqu’une fonctionnalité ou une catégorie est volumineuse, il est suggéré de la séparer en plusieurs parties. Cela rendra le code plus facile à comprendre, propre et également réutilisable.
+
+Supposons que nous ayons besoin d’additionner et de soustraire deux nombres. Nous pouvons le faire avec une seule fonction. Mais la bonne méthode consiste à les diviser en deux. S’il y a des fonctionnalités individuelles, elles pourront être réutilisées et plus simple à comprendre. 
+
+Exemple de clean codes principes – évitez les grosses fonctionnalités :
+
+// Deux petites fonctions plutôt qu’une usine à gaz
+const add = (a, b) => a + b;
+const subtract = (a, b) => a – b;
+
+5. Principles of Clean Code : Répétition de code
+Le code répété signifie un ensemble de code qui est repris plus d’une fois. Cela signifie que votre bloc de code nécessite une fonction.
+
+Dans l’exemple utilisé au chapitre 2, la première partie nous répétons la même chose trois fois.
+
+La solution consiste à créer une fonctionnalité individuelle pour plus d’efficacité et peut également être réutilisée.
+
+Exemple de principles of clean code – répétition de code :
+
+// Le comportement commun est factorisé dans une seule fonction
+const formatCurrency = (amount, currency = « EUR ») =>
+new Intl.NumberFormat(« fr-FR », { style: « currency », currency }).format(amount);
+
+console.log(formatCurrency(29.9)); // 29,90 €
+console.log(formatCurrency(15.5, « USD »)); // $15.50
+
+6. Code clean : Noms des variables
+“Camel case” est la règle pour désigner des variables et des fonctions, ainsi que d’autres éléments. 
+
+Cela signifie qu’un nom est censé commencer par une petite lettre et que chaque première lettre du mot suivant commencera par une majuscule.
+La fonction et la variable doivent toutes deux respecter cette règle.
+
+Noms des variables clean code
+7. Code clean book : Noms significatifs
+Un nom significatif est l’une des conventions les plus importantes. Utilisez toujours un nom significatif pour les variables, les fonctions et autres. Choisissez un nom qui exprime le sens de votre objectif.
+
+Si nous avons besoin d’une fonction qui obtiendra les informations bancaires de l’utilisateur, nous ne devons pas utiliser un nom comme « getUserInfo« . Nous devons utiliser « getUserBankInfo » pour être plus précis.
+
+Exemple de noms significatifs :
+
+// Un nom qui dit exactement ce que fait la fonction
+const getUserBankInfo = (userId) => fetch(/api/bank-info/${userId});
+
+8. Principles of Clean Code : Privilégier le détail plutôt qu’un résumé
+Essayez d’utiliser des détails pour chaque désignation. Imaginons que nous ayons besoin d’une fonctionnalité qui permette de trouver un utilisateur grâce à son téléphone. Dans ce cas, nous pouvons utiliser des noms concis, mais le risque d’erreur est élevé s’il existe d’autres fonctionnalités similaires.
+
+Nous devons utiliser un nom détaillé et précis qui exprime le sens en quelques mots.
+
+Exemple de principles of clean code :
+
+// Le nom précise l’intention ET le critère de recherche
+const findUserByPhoneNumber = (phoneNumber) =>
+users.find((user) => user.phone === phoneNumber);
+
+9. Principles of Clean Code : Utiliser des verbes cohérents pour chaque concept
+C’est la règle de désignation la plus importante. Si nous avons besoin d’une fonction CRUD, nous utiliserons “create”, “get” ou “update” pour la désigner.
+
+Si nous devons obtenir des informations sur un utilisateur à partir de la base de données, alors le nom de la fonction peut être “userInfo”, “user” ou “fetchUser”, mais cette règle est fausse. Nous devrions plutôt utiliser “getUser”.
+
+Exemple des verbes cohérents pour chaque concept :
+
+// “get”, “create”, “update”, “delete” restent constants
+const getUser = (id) => fetch(/api/users/${id});
+const createUser = (data) => fetch(« /api/users », { method: « POST », body: data });
+const updateUser = (id, d)=> fetch(/api/users/${id}, { method: « PUT », body: d });
+const deleteUser = (id) => fetch(/api/users/${id}, { method: « DELETE » });
+
+10. Clean Code : Utiliser des noms pour le nom de classe et utiliser le “Pascal Case”
+La catégorie est avant tout un modèle pour quelque chose. Cependant ne pas utiliser de verbes pour les catégories.
+
+D’un autre côté, une catégorie devrait utiliser le “Pascal case” pour les objets !
+
+Exemple :
+
+// Classe = nom + PascalCase, pas de verbe
+class ShoppingCart {
+addItem(item) { /* … / } removeItem(id) { / … / } getTotal() { / … */ }
+}
+
+11. Clean code principes : Mettre les valeurs constantes en majuscules (SNAKE UPPER CASE)
+Voici une autre règle à respecter pour faire du clean code. Utilisez toujours des noms en majuscules pour les constantes.
+
+“Snake uppercase” signifie que toutes les lettres seront en majuscules et qu’un trait viendra séparer tous les mots.
+
+Exemple :
+
+// Tous les mots en majuscules + underscores
+const DEFAULT_PAGE_SIZE = 20;
+
+12. Code clean : Évitez les noms de variables à une lettre
+Une variable d’une lettre est une très mauvaise chose à faire. Ne pas l’utiliser pour un nom de variable, mais dans une séquence, nous pouvons utiliser certaines variables avec une lettre, ceci est correct.
+
+Exemple de code clean – évitez les noms de variables à une lettre :
+
+// Sauf index de boucle, choisissez des noms explicites
+const taxRate = 0.2;
+const subtotal = 120;
+const totalWithTax = subtotal * (1 + taxRate);

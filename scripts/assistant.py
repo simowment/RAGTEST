@@ -13,44 +13,43 @@ from llama_index.core import (
     StorageContext,
     load_index_from_storage,
 )
-from llama_index.llms.openrouter import OpenRouter
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.postprocessor.cohere_rerank import CohereRerank
 from openai import RateLimitError
 import chromadb
+from llm_manager import LLMManager
 
 # Load environment variables
 load_dotenv()
 
 # Constants
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "tngtech/deepseek-r1t2-chimera:free")
 CHROMA_PATH = os.getenv("CHROMA_PATH", "chroma_db")
 
-def setup_global_settings(context_window=163840, max_tokens=4096):
+def setup_global_settings(llm_manager, llm_settings_override=None):
     """
-    Set up the global settings for LlamaIndex, adaptable for different modes.
+    Set up the global settings for LlamaIndex using the LLMManager.
     """
-    primary_key = os.getenv("OPENROUTER_API_KEY_1")
-    if not primary_key:
-        print("Error: OPENROUTER_API_KEY_1 environment variable not set.", file=sys.stderr)
-        sys.exit(1)
+    llm_settings = {
+        "temperature": 0.1,
+        "max_tokens": 4096,
+        "context_window": 163840,
+        **(llm_settings_override or {}),
+    }
+    llm_manager.llm_settings = llm_settings
+    
+    # Set the initial LLM
+    Settings.llm = llm_manager.get_llm()
+    
+    # Set other global settings
+    Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+    Settings.chunk_size = 512
+    Settings.chunk_overlap = 50
         
     if not os.getenv("COHERE_API_KEY"):
         print("Error: COHERE_API_KEY environment variable not set.", file=sys.stderr)
         print("Please get your key from https://dashboard.cohere.com/api-keys", file=sys.stderr)
         sys.exit(1)
-
-    Settings.llm = OpenRouter(
-        api_key=primary_key,
-        model=OPENROUTER_MODEL, 
-        temperature=0.1, 
-        max_tokens=max_tokens,
-        context_window=context_window
-    )
-    Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
-    Settings.chunk_size = 512
-    Settings.chunk_overlap = 50
 
 def get_multiline_input(prompt):
     """
@@ -67,27 +66,11 @@ def get_multiline_input(prompt):
             break
     return "\n".join(lines)
 
-def run_chat_loop(chat_engine, session_name):
+def run_chat_loop(chat_engine, session_name, llm_manager):
     """
-    Main chat loop for a given chat engine.
+    Main chat loop for a given chat engine, now using LLMManager.
     """
-    # Get keys for fallback mechanism
-    key1 = os.getenv("OPENROUTER_API_KEY_1")
-    key2 = os.getenv("OPENROUTER_API_KEY_2")
-    api_keys = [key.strip() for key in [key1, key2] if key and key.strip()]
-    
-    if not api_keys:
-        print("Warning: No OpenRouter API keys found. Fallback is disabled.", file=sys.stderr)
-
-    current_key_index = 0
-    
-    # Store original LLM settings to re-create it with a new key
-    original_llm_settings = {
-        "model": Settings.llm.model,
-        "temperature": Settings.llm.temperature,
-        "max_tokens": Settings.llm.max_tokens,
-        "context_window": Settings.llm.context_window,
-    }
+    max_retries = len(llm_manager.configurations)
 
     while True:
         question = input(f"\nYour question for {session_name} (or 'exit' to quit): ")
@@ -97,38 +80,47 @@ def run_chat_loop(chat_engine, session_name):
             continue
 
         print("\nGenerating response...")
-        try:
-            response = chat_engine.chat(question)
-            print("\n--- RESPONSE ---")
-            print(response.response)
-            print("----------------")
-        except RateLimitError:
-            if not api_keys or len(api_keys) == 1:
-                print("\n--- ERROR ---", file=sys.stderr)
-                print("The API key is rate-limited. Please try again later or add more keys.", file=sys.stderr)
-                print("---------------", file=sys.stderr)
-                continue
-
-            current_key_index = (current_key_index + 1) % len(api_keys)
-            new_key = api_keys[current_key_index]
-            print(f"\n--- INFO: Rate limit hit. Switching to key index {current_key_index}. ---\n")
+        
+        for attempt in range(max_retries):
+            try:
+                # Update engine's LLM to the current one from the manager
+                chat_engine._llm = llm_manager.get_llm()
+                response = chat_engine.chat(question)
+                
+                print("\n--- RESPONSE ---")
+                print(response.response)
+                print("----------------")
+                break # Success, so break the retry loop
             
-            # Update the LLM in the chat engine with the new key
-            chat_engine._llm = OpenRouter(api_key=new_key, **original_llm_settings)
+            except RateLimitError as e:
+                print(f"--> Caught RateLimitError (Attempt {attempt + 1}/{max_retries}).")
+                llm_manager.handle_rate_limit(e)
+                llm_manager.switch_to_next_config()
+                if attempt < max_retries - 1:
+                    print("--> Retrying with new configuration...")
+                else:
+                    print("\n--- ERROR ---", file=sys.stderr)
+                    print("All API key/model configurations failed after retries.", file=sys.stderr)
+                    print("---------------", file=sys.stderr)
             
-            # We retry the same question automatically in the next loop iteration if the user re-enters it.
-            # For simplicity, we just notify the user. A more complex implementation would retry automatically.
-            print("Please ask your question again to retry with the new key.")
+            except Exception as e:
+                print(f"\nAn error occurred: {e}", file=sys.stderr)
+                print("--> Switching configuration and retrying...")
+                llm_manager.switch_to_next_config()
+                if attempt >= max_retries -1:
+                    print("\n--- ERROR ---", file=sys.stderr)
+                    print("An unexpected error occurred and all configurations failed.", file=sys.stderr)
+                    print("---------------", file=sys.stderr)
 
-        except Exception as e:
-            print(f"\nAn error occurred during the query: {e}", file=sys.stderr)
-
-def vectorbt_mode(api_mode=False):
+def vectorbt_mode(api_mode=False, llm_manager=None):
     """
     Handles the logic for querying the VectorBT documentation and codebase.
     Returns a chat_engine.
     """
-    setup_global_settings(max_tokens=2048)
+    if not llm_manager:
+        llm_manager = LLMManager()
+
+    setup_global_settings(llm_manager, llm_settings_override={"max_tokens": 2048})
     print("Loading VectorBT index from disk...")
     
     if not os.path.exists(CHROMA_PATH):
@@ -140,18 +132,15 @@ def vectorbt_mode(api_mode=False):
             sys.exit(1)
 
     try:
-        # Recreate the ChromaVectorStore with the specific collection
         chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
-        chroma_collection = chroma_client.get_collection("vectorbt_docs") # Use get_collection to avoid recreating if it doesn't exist
+        chroma_collection = chroma_client.get_collection("vectorbt_docs")
         vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
         
-        # Load the storage context from disk, providing the vector_store
         storage_context = StorageContext.from_defaults(
             persist_dir=CHROMA_PATH,
             vector_store=vector_store
         )
         
-        # Load the index from the fully configured storage context
         index = load_index_from_storage(storage_context=storage_context)
         
         chat_engine = index.as_chat_engine(
@@ -169,17 +158,20 @@ def vectorbt_mode(api_mode=False):
         print(f"Assistant ready: VectorBT Assistant")
         print("Ask any question about VectorBT. Type 'exit' or 'quit' to return to the main menu.")
         print("="*50 + "\n")
-        run_chat_loop(chat_engine, "VectorBT Assistant")
+        run_chat_loop(chat_engine, "VectorBT Assistant", llm_manager)
     except Exception as e:
         print(f"Error loading vector index: {e}", file=sys.stderr)
         sys.exit(1)
 
-def review_mode(api_mode=False, code_snippet=None):
+def review_mode(api_mode=False, code_snippet=None, llm_manager=None):
     """
     Handles the logic for reviewing a code snippet.
     Returns a chat_engine.
     """
-    setup_global_settings(context_window=163840, max_tokens=4096)
+    if not llm_manager:
+        llm_manager = LLMManager()
+
+    setup_global_settings(llm_manager, llm_settings_override={"context_window": 163840, "max_tokens": 4096})
 
     if not api_mode:
         code_to_review = get_multiline_input(
@@ -216,31 +208,43 @@ def review_mode(api_mode=False, code_snippet=None):
     print(f"Assistant ready: Code Review Assistant")
     print("Ask any question about the code. Type 'exit' or 'quit' to return to the main menu.")
     print("="*50 + "\n")
-    run_chat_loop(chat_engine, "Code Review Assistant")
+    run_chat_loop(chat_engine, "Code Review Assistant", llm_manager)
 
 def main():
     """
     Main function to let the user choose a mode and run the assistant.
     """
-    print(f"--- Unified RAG Assistant (Model: {OPENROUTER_MODEL}) ---")
-    while True:
-        print("\nPlease choose a mode:")
-        print("  1: Chat with Vectorbt Documentation & Codebase")
-        print("  2: Review a temporary code snippet")
-        print("  exit: Quit the assistant")
+    try:
+        # Initialize one LLMManager for the entire session
+        llm_manager = LLMManager()
+        print(f"--- Unified RAG Assistant ---")
+        print(f"Models available: {', '.join(llm_manager.models)}")
         
-        choice = input("Enter your choice (1, 2, or exit): ").strip().lower()
+        while True:
+            print("\nPlease choose a mode:")
+            print("  1: Chat with Vectorbt Documentation & Codebase")
+            print("  2: Review a temporary code snippet")
+            print("  exit: Quit the assistant")
+            
+            choice = input("Enter your choice (1, 2, or exit): ").strip().lower()
 
-        if choice == '1':
-            vectorbt_mode()
-            break
-        elif choice == '2':
-            review_mode()
-            break
-        elif choice in ['exit', 'quit', 'q']:
-            break
-        else:
-            print("Invalid choice. Please enter 1, 2, or exit.")
+            if choice == '1':
+                vectorbt_mode(llm_manager=llm_manager)
+                break 
+            elif choice == '2':
+                review_mode(llm_manager=llm_manager)
+                break
+            elif choice in ['exit', 'quit', 'q']:
+                break
+            else:
+                print("Invalid choice. Please enter 1, 2, or exit.")
+
+    except ValueError as e:
+        print(f"\nFatal Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"\nAn unexpected fatal error occurred: {e}", file=sys.stderr)
+        sys.exit(1)
 
     print("\nAu revoir!")
 

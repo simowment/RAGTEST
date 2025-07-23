@@ -4,40 +4,42 @@ FastAPI application to expose the RAG assistant as an API.
 """
 
 import os
-from fastapi import FastAPI, HTTPException, Request
+import sys
+from pathlib import Path
+
+# Add the 'scripts' directory to the Python path
+# This is necessary for the imports to work correctly when running the API from the root
+sys.path.append(str(Path(__file__).parent / "scripts"))
+
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
 from openai import RateLimitError
-from scripts.assistant import (
+from assistant import (
     vectorbt_mode,
     review_mode,
 )
+from llm_manager import LLMManager, managed_chat_request
 from contextlib import asynccontextmanager
 
-# In-memory store for chat engines and key management
-# In a real-world scenario, you'd use a more persistent store like Redis
+# In-memory store for chat engines and the LLM manager
 STATE = {
     "vectorbt_chat_engine": None,
-    "api_keys": [],
-    "current_key_index": 0
+    "llm_manager": None
 }
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Code to run on startup
-    print("Loading API keys...")
-    key1 = os.getenv("OPENROUTER_API_KEY_1")
-    key2 = os.getenv("OPENROUTER_API_KEY_2")
+    print("Initializing LLM Manager...")
+    try:
+        STATE["llm_manager"] = LLMManager()
+    except ValueError as e:
+        print(f"Error initializing LLM Manager: {e}")
+        # This is a critical error, so we might want to stop the app from starting.
+        # For now, we print and let it continue, but it will fail on the first request.
+        # In a production setup, you might `raise` here to stop the server.
     
-    if not key1:
-        raise RuntimeError("OPENROUTER_API_KEY_1 environment variable is not set.")
-        
-    STATE["api_keys"] = [key.strip() for key in [key1, key2] if key and key.strip()]
-    
-    if not STATE["api_keys"]:
-         raise RuntimeError("No OpenRouter API keys found in environment variables.")
-         
-    print(f"Loaded {len(STATE['api_keys'])} API key(s).")
     yield
     # Code to run on shutdown (if any)
     print("Shutting down...")
@@ -61,74 +63,51 @@ def get_chat_engine(mode, code_snippet=None):
     """
     Manages the creation and retrieval of chat engines.
     For VectorBT, it's a singleton. For code review, it's created on-demand.
+    The LLM instance within the engine will be managed by the LLMManager.
     """
     if mode == "vectorbt":
         if STATE["vectorbt_chat_engine"] is None:
             print("Creating new VectorBT chat engine...")
+            # The LLM is set globally in vectorbt_mode, but we will override it per-request
             STATE["vectorbt_chat_engine"] = vectorbt_mode(api_mode=True)
         return STATE["vectorbt_chat_engine"]
     elif mode == "review":
         print("Creating new on-demand code review engine...")
+        # The LLM is set globally in review_mode, but we will override it per-request
         return review_mode(api_mode=True, code_snippet=code_snippet)
-
-def switch_api_key(engine):
-    """Switches the API key for the given chat engine."""
-    keys = STATE["api_keys"]
-    if len(keys) <= 1:
-        # No other keys to switch to
-        return False
-
-    current_index = STATE["current_key_index"]
-    new_index = (current_index + 1) % len(keys)
-    new_key = keys[new_index]
-    
-    print(f"Rate limit hit. Switching from key index {current_index} to {new_index}.")
-
-    # Re-create the LLM with the new key but same settings
-    original_llm_settings = {
-        "model": engine._llm.model,
-        "temperature": engine._llm.temperature,
-        "max_tokens": engine._llm.max_tokens,
-        "context_window": engine._llm.context_window,
-    }
-    engine._llm = vectorbt_mode(api_mode=True)._llm.__class__(api_key=new_key, **original_llm_settings)
-    STATE["current_key_index"] = new_index
-    return True
-
-async def handle_chat_request(engine, question):
-    """
-    A unified function to handle chat requests with fallback logic.
-    """
-    for _ in range(len(STATE["api_keys"])):
-        try:
-            response = await engine.achat(question)
-            return {"response": str(response)}
-        except RateLimitError:
-            print("Caught RateLimitError in API request.")
-            if not switch_api_key(engine):
-                raise HTTPException(status_code=429, detail="All API keys are rate-limited. Please try again later.")
-            # After switching, the loop will retry with the new key.
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-    
-    # This should only be reached if all keys fail
-    raise HTTPException(status_code=429, detail="All API keys are rate-limited after retries.")
 
 @app.post("/vectorbt/query", summary="Query the VectorBT documentation")
 async def query_vectorbt(query: Query):
     """
     Ask a question about the VectorBT documentation and codebase.
     """
+    if not STATE["llm_manager"]:
+        raise HTTPException(status_code=500, detail="LLM Manager is not initialized. Check server logs.")
+
     engine = get_chat_engine("vectorbt")
-    return await handle_chat_request(engine, query.question)
+    try:
+        return await managed_chat_request(engine, query.question, STATE["llm_manager"])
+    except RateLimitError as e:
+        # This is the final error after all retries have failed
+        raise HTTPException(status_code=429, detail=f"All API configurations are rate-limited. Last error: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
 @app.post("/review/code", summary="Review a code snippet")
 async def review_code(review: CodeReview):
     """
     Provide a code snippet and a question to get a review.
     """
+    if not STATE["llm_manager"]:
+        raise HTTPException(status_code=500, detail="LLM Manager is not initialized. Check server logs.")
+
     engine = get_chat_engine("review", code_snippet=review.code)
-    return await handle_chat_request(engine, review.question)
+    try:
+        return await managed_chat_request(engine, review.question, STATE["llm_manager"])
+    except RateLimitError as e:
+        raise HTTPException(status_code=429, detail=f"All API configurations are rate-limited. Please try again later. Last error: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
     uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True) 
