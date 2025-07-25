@@ -3,7 +3,6 @@
 FastAPI application to expose the RAG assistant as an API.
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -12,6 +11,8 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent / "scripts"))
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import uvicorn
 from openai import RateLimitError
@@ -52,12 +53,22 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 class Query(BaseModel):
     question: str
 
 class CodeReview(BaseModel):
     code: str
     question: str
+
+@app.get("/", response_class=FileResponse)
+async def read_index():
+    """
+    Serve the main web interface.
+    """
+    return FileResponse('static/index.html')
 
 def get_chat_engine(mode, code_snippet=None):
     """

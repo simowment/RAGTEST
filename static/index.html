@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VectorBT RAG Assistant</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 VectorBT RAG Assistant</h1>
+            <p>Analysez votre code et explorez la documentation VectorBT</p>
+        </header>
+
+        <div class="mode-selector">
+            <button id="vectorbt-mode" class="mode-btn active">📚 Documentation VectorBT</button>
+            <button id="review-mode" class="mode-btn">🔍 Review de Code</button>
+        </div>
+
+        <div class="main-content">
+            <!-- Code Review Mode -->
+            <div id="review-panel" class="panel hidden">
+                <div class="code-section">
+                    <div class="section-header">
+                        <h3>💻 Votre Code</h3>
+                        <div class="code-actions">
+                            <button id="clear-code">Effacer</button>
+                            <button id="paste-code">Coller</button>
+                            <select id="language-select">
+                                <option value="python">Python</option>
+                                <option value="javascript">JavaScript</option>
+                                <option value="typescript">TypeScript</option>
+                                <option value="java">Java</option>
+                                <option value="cpp">C++</option>
+                                <option value="csharp">C#</option>
+                                <option value="go">Go</option>
+                                <option value="rust">Rust</option>
+                            </select>
+                        </div>
+                    </div>
+                    <textarea id="code-editor" placeholder="Collez votre code ici..."></textarea>
+                </div>
+            </div>
+
+            <!-- Chat Section -->
+            <div class="chat-section">
+                <div class="chat-header">
+                    <h3 id="chat-title">💬 Chat avec VectorBT</h3>
+                    <button id="clear-chat">Nouveau Chat</button>
+                </div>
+                
+                <div id="chat-messages" class="chat-messages"></div>
+                
+                <div class="chat-input-section">
+                    <div class="input-container">
+                        <textarea id="question-input" placeholder="Posez votre question..."></textarea>
+                        <button id="send-btn" disabled>
+                            <span class="send-icon">➤</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Génération de la réponse...</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/go/go.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/rust/rust.min.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

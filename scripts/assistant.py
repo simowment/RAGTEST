@@ -16,7 +16,6 @@ from llama_index.core import (
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.postprocessor.cohere_rerank import CohereRerank
-from openai import RateLimitError
 import chromadb
 from llm_manager import LLMManager
 
@@ -68,49 +67,41 @@ def get_multiline_input(prompt):
 
 def run_chat_loop(chat_engine, session_name, llm_manager):
     """
-    Main chat loop for a given chat engine, now using LLMManager.
+    Boucle de chat simplifiée avec gestion d'erreur basique.
     """
-    max_retries = len(llm_manager.configurations)
-
     while True:
-        question = input(f"\nYour question for {session_name} (or 'exit' to quit): ")
+        question = input(f"\nVotre question pour {session_name} (ou 'exit' pour quitter): ")
         if question.strip().lower() in ['exit', 'quit', 'q']:
             break
         if not question.strip():
             continue
 
-        print("\nGenerating response...")
+        print("\nGénération de la réponse...")
+        
+        max_retries = len(llm_manager.configurations)
         
         for attempt in range(max_retries):
             try:
-                # Update engine's LLM to the current one from the manager
                 chat_engine._llm = llm_manager.get_llm()
                 response = chat_engine.chat(question)
                 
-                print("\n--- RESPONSE ---")
+                print("\n--- RÉPONSE ---")
                 print(response.response)
-                print("----------------")
-                break # Success, so break the retry loop
-            
-            except RateLimitError as e:
-                print(f"--> Caught RateLimitError (Attempt {attempt + 1}/{max_retries}).")
-                llm_manager.handle_rate_limit(e)
-                llm_manager.switch_to_next_config()
-                if attempt < max_retries - 1:
-                    print("--> Retrying with new configuration...")
-                else:
-                    print("\n--- ERROR ---", file=sys.stderr)
-                    print("All API key/model configurations failed after retries.", file=sys.stderr)
-                    print("---------------", file=sys.stderr)
+                print("---------------")
+                break
             
             except Exception as e:
-                print(f"\nAn error occurred: {e}", file=sys.stderr)
-                print("--> Switching configuration and retrying...")
-                llm_manager.switch_to_next_config()
-                if attempt >= max_retries -1:
-                    print("\n--- ERROR ---", file=sys.stderr)
-                    print("An unexpected error occurred and all configurations failed.", file=sys.stderr)
-                    print("---------------", file=sys.stderr)
+                print(f"Tentative {attempt + 1}/{max_retries} échouée")
+                
+                if attempt < max_retries - 1:
+                    if llm_manager.is_rate_limit_error(e):
+                        print("Rate limit → modèle saturé, changement immédiat")
+                    else:
+                        print("Erreur → changement de configuration")
+                    llm_manager.switch_to_next_config()
+                else:
+                    print(f"Erreur finale: {e}")
+                    break
 
 def vectorbt_mode(api_mode=False, llm_manager=None):
     """

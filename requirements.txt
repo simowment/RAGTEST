@@ -9,6 +9,7 @@ llama-index-postprocessor-cohere-rerank
 # API Framework
 fastapi
 uvicorn[standard]
+python-multipart
 
 # Vector DB
 chromadb
