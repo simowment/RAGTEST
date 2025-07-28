@@ -30,9 +30,6 @@ class RAGAssistant {
         this.questionInput = document.getElementById('question-input');
         this.sendBtn = document.getElementById('send-btn');
         this.clearChatBtn = document.getElementById('clear-chat');
-        
-        // Loading
-        this.loadingEl = document.getElementById('loading');
     }
 
     setupEventListeners() {
@@ -252,7 +249,11 @@ class RAGAssistant {
 
     setLoading(loading) {
         this.isLoading = loading;
-        this.loadingEl.classList.toggle('hidden', !loading);
+        if (loading) {
+            this.sendBtn.classList.add('loading');
+        } else {
+            this.sendBtn.classList.remove('loading');
+        }
         this.updateSendButton();
     }
 }

@@ -26,7 +26,8 @@ from contextlib import asynccontextmanager
 # In-memory store for chat engines and the LLM manager
 STATE = {
     "vectorbt_chat_engine": None,
-    "llm_manager": None
+    "llm_manager": None,
+    "review_sessions": {}  # <--- nouveau
 }
 
 @asynccontextmanager
@@ -62,6 +63,25 @@ class Query(BaseModel):
 class CodeReview(BaseModel):
     code: str
     question: str
+    session_id: str = None  # <--- nouveau
+from typing import List, Optional, Literal
+
+class ChatMessage(BaseModel):
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+class ChatCompletionRequest(BaseModel):
+    model: str
+    messages: List[ChatMessage]
+    temperature: Optional[float] = 0.7
+    max_tokens: Optional[int] = 1024
+
+class ChatCompletionResponse(BaseModel):
+    id: str = "chatcmpl-xxx"
+    object: str = "chat.completion"
+    choices: List[dict]
+    usage: Optional[dict] = None
+
 
 @app.get("/", response_class=FileResponse)
 async def read_index():
@@ -104,7 +124,7 @@ async def query_vectorbt(query: Query):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
-@app.post("/review/code", summary="Review a code snippet")
+@app.post("/review/code")
 async def review_code(review: CodeReview):
     """
     Provide a code snippet and a question to get a review.
@@ -112,13 +132,57 @@ async def review_code(review: CodeReview):
     if not STATE["llm_manager"]:
         raise HTTPException(status_code=500, detail="LLM Manager is not initialized. Check server logs.")
 
-    engine = get_chat_engine("review", code_snippet=review.code)
+    # Utilisez session_id pour retrouver ou créer l'historique
+    session_id = review.session_id or "default"
+    if session_id not in STATE["review_sessions"]:
+        engine = get_chat_engine("review", code_snippet=review.code)
+        STATE["review_sessions"][session_id] = engine
+    else:
+        engine = STATE["review_sessions"][session_id]
+
     try:
         return await managed_chat_request(engine, review.question, STATE["llm_manager"])
-    except RateLimitError as e:
-        raise HTTPException(status_code=429, detail=f"All API configurations are rate-limited. Please try again later. Last error: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
+
+from uuid import uuid4
+from fastapi import Request
+
+@app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
+async def openai_compatible_chat(req: ChatCompletionRequest, request: Request):
+    """
+    OpenAI-compatible chat endpoint for integration with Continue or other clients.
+    """
+    if not STATE["llm_manager"]:
+        raise HTTPException(status_code=500, detail="LLM Manager is not initialized.")
+
+    # Extraire tous les messages user pour les concaténer
+    user_query = "\n".join(msg.content for msg in req.messages if msg.role == "user").strip()
+
+    engine = get_chat_engine("vectorbt")
+
+    try:
+        response = await managed_chat_request(engine, user_query, STATE["llm_manager"])
+        return ChatCompletionResponse(
+            id=f"chatcmpl-{uuid4()}",
+            object="chat.completion",
+            choices=[
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": response.response
+                    },
+                    "finish_reason": "stop"
+                }
+            ],
+            usage=None  # Optionnel: tu peux logguer les tokens ici si dispo
+        )
+    except RateLimitError as e:
+        raise HTTPException(status_code=429, detail=f"Rate limit: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+
 if __name__ == "__main__":
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)

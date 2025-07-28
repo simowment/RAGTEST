@@ -276,6 +276,31 @@ header p {
     justify-content: center;
     transition: all 0.3s ease;
     font-size: 18px;
+    position: relative;
+    overflow: visible; /* Allow loader to extend beyond button */
+}
+
+.small-loader {
+    display: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.2); /* Add slight background for better visibility */
+}
+
+#send-btn.loading .small-loader {
+    display: block;
+}
+
+#send-btn.loading .send-icon {
+    display: none;
 }
 
 #send-btn:hover:not(:disabled) {
