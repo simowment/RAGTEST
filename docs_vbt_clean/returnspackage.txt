@@ -1,1 +1,0 @@
-returns packageModules for working with returns. Offers common financial risk and performance metrics as found in empyrical , an adapter for quantstats, and other features based on returns. Sub-modulesvectorbt.returns.accessors vectorbt.returns.metrics vectorbt.returns.nb vectorbt.returns.qs_adapter

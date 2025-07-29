@@ -1,1 +1,0 @@
-metrics moduleOther metrics that are not compiled with Numba. approx_exp_max_sharpe functionapprox_exp_max_sharpe ( mean_sharpe , var_sharpe , nb_trials ) Expected Maximum Sharpe Ratio. deflated_sharpe_ratio functiondeflated_sharpe_ratio ( * , est_sharpe , var_sharpe , nb_trials , backtest_horizon , skew , kurtosis ) Deflated Sharpe Ratio (DSR). See Deflated Sharpe Ratio .

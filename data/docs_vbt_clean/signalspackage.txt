@@ -1,0 +1,1 @@
+signals packageModules for working with signals, such as entry and exit signals. Sub-modulesvectorbt.signals.accessors vectorbt.signals.enums vectorbt.signals.factory vectorbt.signals.generators vectorbt.signals.nb
