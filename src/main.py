@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Script de lancement pour l'interface web RAG Assistant
 """

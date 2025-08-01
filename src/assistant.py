@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unified RAG assistant for Vectorbt documentation and on-the-fly code review.
+Unified RAG assistant supporting multiple knowledge bases and multimodal capabilities.
 """
 
 import os
@@ -17,12 +17,13 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.postprocessor.cohere_rerank import CohereRerank
 import chromadb
 from llm_manager import LLMManager
+from knowledge_bases import KnowledgeBaseManager, KnowledgeBaseType
 
 # Load environment variables
 load_dotenv()
 
 # Constants
-CHROMA_PATH = os.getenv("CHROMA_PATH", "data/chroma_db")
+CHROMA_PATH = os.getenv("CHROMA_PATH", "data/chroma/vectorbt_db")
 DOCS_PATH = os.getenv("DOCS_PATH", "data/docs_vbt_clean")
 
 
@@ -104,32 +105,50 @@ def run_chat_loop(chat_engine, session_name, llm_manager):
                     print(f"Erreur finale: {e}")
                     break
 
-def vectorbt_mode(api_mode=False, llm_manager=None):
+def load_knowledge_base(kb_id: str, api_mode=False, llm_manager=None):
     """
-    Handles the logic for querying the VectorBT documentation and codebase.
-    Returns a chat_engine.
+    Load a knowledge base by ID and return the appropriate chat engine.
     """
     if not llm_manager:
         llm_manager = LLMManager()
 
-    setup_global_settings(llm_manager, llm_settings_override={"max_tokens": 2048})
-    print("Loading VectorBT index from disk...")
+    kb_manager = KnowledgeBaseManager()
+    kb_config = kb_manager.get_knowledge_base(kb_id)
     
-    if not os.path.exists(CHROMA_PATH):
-        print(f"Error: Index directory not found at {CHROMA_PATH}", file=sys.stderr)
-        print("Please build the index first by running: python scripts/build_index.py", file=sys.stderr)
+    if not kb_config:
+        raise ValueError(f"Knowledge base '{kb_id}' not found")
+    
+    if kb_config.type == KnowledgeBaseType.CODE_REVIEW:
+        # Code review mode doesn't use persistent storage
+        return None  # Will be handled separately
+    
+    # Handle unified strategy assistant
+    if kb_id == "unified_strategy":
+        return load_unified_strategy_assistant(api_mode, llm_manager)
+    
+    setup_global_settings(llm_manager, llm_settings_override={"max_tokens": 2048})
+    print(f"Loading {kb_config.name} index from disk...")
+    
+    # Check if database exists, auto-build if missing
+    kb_manager = KnowledgeBaseManager()
+    if not kb_manager.auto_build_knowledge_base(kb_id):
+        error_msg = f"Error: Failed to build or find index for {kb_config.name}"
+        print(error_msg, file=sys.stderr)
         if api_mode:
-            raise FileNotFoundError(f"Index not found at {CHROMA_PATH}")
+            raise FileNotFoundError(error_msg)
         else:
             sys.exit(1)
+    
+    # Use the configured path (should exist after auto-build)
+    actual_path = kb_config.chroma_path
 
     try:
-        chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
-        chroma_collection = chroma_client.get_collection("vectorbt_docs")
+        chroma_client = chromadb.PersistentClient(path=actual_path)
+        chroma_collection = chroma_client.get_collection(kb_config.collection_name)
         vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
         
         storage_context = StorageContext.from_defaults(
-            persist_dir=CHROMA_PATH,
+            persist_dir=actual_path,
             vector_store=vector_store
         )
         
@@ -149,13 +168,195 @@ def vectorbt_mode(api_mode=False, llm_manager=None):
         )
 
         print("\n" + "="*50)
-        print(f"Assistant ready: VectorBT Assistant")
-        print("Ask any question about VectorBT. Type 'exit' or 'quit' to return to the main menu.")
+        print(f"Assistant ready: {kb_config.name}")
+        print(f"Ask any question about {kb_config.description.lower()}. Type 'exit' or 'quit' to return to the main menu.")
         print("="*50 + "\n")
-        run_chat_loop(chat_engine, "VectorBT Assistant", llm_manager)
+        run_chat_loop(chat_engine, kb_config.name, llm_manager)
     except Exception as e:
         print(f"Error loading vector index: {e}", file=sys.stderr)
+        if api_mode:
+            raise
         sys.exit(1)
+
+def load_unified_strategy_assistant(api_mode=False, llm_manager=None):
+    """
+    Load the unified strategy assistant that combines VectorBT and Trading Papers.
+    """
+    if not llm_manager:
+        llm_manager = LLMManager()
+
+    setup_global_settings(llm_manager, llm_settings_override={"max_tokens": 4096})
+    print("Loading Unified Strategy Assistant (VectorBT + Trading Papers)...")
+    
+    # Auto-build both knowledge bases if needed
+    kb_manager = KnowledgeBaseManager()
+    
+    if not kb_manager.auto_build_knowledge_base("vectorbt"):
+        error_msg = "Failed to build or find VectorBT index"
+        if api_mode:
+            raise FileNotFoundError(error_msg)
+        print(error_msg, file=sys.stderr)
+        sys.exit(1)
+    
+    if not kb_manager.auto_build_knowledge_base("trading_papers"):
+        error_msg = "Failed to build or find Trading Papers index"
+        if api_mode:
+            raise FileNotFoundError(error_msg)
+        print(error_msg, file=sys.stderr)
+        sys.exit(1)
+    
+    # Use configured paths (should exist after auto-build)
+    vectorbt_path = os.getenv("CHROMA_PATH", "data/chroma_db")
+    trading_path = os.getenv("TRADING_CHROMA_PATH", "data/chroma/trading_db")
+
+    try:
+        # Load VectorBT index
+        vectorbt_client = chromadb.PersistentClient(path=vectorbt_path)
+        vectorbt_collection = vectorbt_client.get_collection("vectorbt_docs")
+        vectorbt_vector_store = ChromaVectorStore(chroma_collection=vectorbt_collection)
+        vectorbt_storage_context = StorageContext.from_defaults(
+            persist_dir=vectorbt_path,
+            vector_store=vectorbt_vector_store
+        )
+        vectorbt_index = load_index_from_storage(storage_context=vectorbt_storage_context)
+        
+        # Load Trading Papers index
+        trading_client = chromadb.PersistentClient(path=trading_path)
+        trading_collection = trading_client.get_collection("trading_papers_docs")
+        trading_vector_store = ChromaVectorStore(chroma_collection=trading_collection)
+        trading_storage_context = StorageContext.from_defaults(
+            persist_dir=trading_path,
+            vector_store=trading_vector_store
+        )
+        trading_index = load_index_from_storage(storage_context=trading_storage_context)
+
+        if api_mode:
+            # Return a unified chat engine for API mode
+            return UnifiedStrategyChat(vectorbt_index, trading_index, llm_manager)
+
+        # Create unified chat engine for CLI mode
+        unified_chat = UnifiedStrategyChat(vectorbt_index, trading_index, llm_manager)
+        
+        print("\n" + "="*50)
+        print("Assistant ready: Unified Strategy Assistant")
+        print("Ask questions combining VectorBT technical knowledge with trading research insights.")
+        print("="*50 + "\n")
+        run_chat_loop(unified_chat, "Unified Strategy Assistant", llm_manager)
+        
+    except Exception as e:
+        print(f"Error loading unified strategy assistant: {e}", file=sys.stderr)
+        if api_mode:
+            raise
+        sys.exit(1)
+
+class UnifiedStrategyChat:
+    """Chat interface that queries both VectorBT and Trading Papers indices."""
+    
+    def __init__(self, vectorbt_index, trading_index, llm_manager):
+        self.vectorbt_index = vectorbt_index
+        self.trading_index = trading_index
+        self.llm_manager = llm_manager
+        self.conversation_history = []
+        
+        # Create retrieval engines
+        self.vectorbt_retriever = vectorbt_index.as_retriever(similarity_top_k=8)
+        self.trading_retriever = trading_index.as_retriever(similarity_top_k=7)
+        
+    def _retrieve_context(self, question):
+        """Retrieve context from both knowledge bases."""
+        # Get relevant nodes from both indices
+        vectorbt_nodes = self.vectorbt_retriever.retrieve(question)
+        trading_nodes = self.trading_retriever.retrieve(question)
+        
+        # Combine and format context
+        context_parts = []
+        
+        if vectorbt_nodes:
+            context_parts.append("=== VectorBT Technical Documentation ===")
+            for i, node in enumerate(vectorbt_nodes[:5], 1):
+                context_parts.append(f"VBT-{i}: {node.text}")
+        
+        if trading_nodes:
+            context_parts.append("\n=== Trading Research Papers ===")
+            for i, node in enumerate(trading_nodes[:5], 1):
+                context_parts.append(f"PAPER-{i}: {node.text}")
+        
+        return "\n".join(context_parts)
+    
+    def _build_prompt(self, question):
+        """Build the full prompt with context and conversation history."""
+        context = self._retrieve_context(question)
+        
+        prompt_parts = [
+            "You are a unified strategy development assistant with access to both VectorBT technical documentation and trading research papers.",
+            "Use the VectorBT documentation for technical implementation details and the trading papers for theoretical insights and strategy concepts.",
+            "Provide comprehensive answers that combine both technical implementation and theoretical background.",
+            "",
+            "IMPORTANT: When showing code in your responses, ALWAYS use proper markdown code blocks with triple backticks (```) and specify the language:",
+            "```python",
+            "# Example code",
+            "import vectorbt as vbt",
+            "```",
+            "For inline code, use single backticks like `vbt.Portfolio`.",
+            "",
+            "=== KNOWLEDGE BASE CONTEXT ===",
+            context,
+            "=== END CONTEXT ===",
+            ""
+        ]
+        
+        # Add conversation history
+        if self.conversation_history:
+            prompt_parts.append("=== CONVERSATION HISTORY ===")
+            for i, (q, a) in enumerate(self.conversation_history[-2:], 1):
+                prompt_parts.append(f"Q{i}: {q}")
+                prompt_parts.append(f"A{i}: {a}")
+            prompt_parts.append("=== END HISTORY ===\n")
+        
+        prompt_parts.append(f"Current question: {question}")
+        
+        return "\n".join(prompt_parts)
+    
+    def chat(self, question):
+        """Synchronous chat method for CLI usage."""
+        full_prompt = self._build_prompt(question)
+        
+        llm = self.llm_manager.get_llm()
+        response = llm.complete(full_prompt)
+        response_text = str(response)
+        
+        # Store in conversation history
+        self.conversation_history.append((question, response_text))
+        
+        class SimpleResponse:
+            def __init__(self, text):
+                self.response = text
+        
+        return SimpleResponse(response_text)
+    
+    async def achat(self, question):
+        """Async chat method for API usage."""
+        full_prompt = self._build_prompt(question)
+        
+        llm = self.llm_manager.get_llm()
+        response = await llm.acomplete(full_prompt)
+        response_text = str(response)
+        
+        # Store in conversation history
+        self.conversation_history.append((question, response_text))
+        
+        class SimpleResponse:
+            def __init__(self, text):
+                self.response = text
+        
+        return SimpleResponse(response_text)
+
+def vectorbt_mode(api_mode=False, llm_manager=None):
+    """
+    Handles the logic for querying the VectorBT documentation and codebase.
+    Returns a chat_engine.
+    """
+    return load_knowledge_base("vectorbt", api_mode, llm_manager)
 
 def review_mode(api_mode=False, code_snippet=None, llm_manager=None):
     """
@@ -191,7 +392,16 @@ def review_mode(api_mode=False, code_snippet=None, llm_manager=None):
             """Build the full context including code and conversation history."""
             context_parts = [
                 "You are a code review assistant. Please analyze the following code and answer questions about it.",
-                f"\n--- CODE TO REVIEW ---\n{self.code}\n--- END CODE ---\n"
+                "",
+                "IMPORTANT: When showing code in your responses, ALWAYS use proper markdown code blocks with triple backticks (```) and specify the language. For example:",
+                "```python",
+                "def example():",
+                "    return 'code here'",
+                "```",
+                "",
+                "For inline code references, use single backticks like `variable_name`.",
+                "",
+                f"--- CODE TO REVIEW ---\n{self.code}\n--- END CODE ---"
             ]
             
             # Add conversation history for context
@@ -256,32 +466,53 @@ def review_mode(api_mode=False, code_snippet=None, llm_manager=None):
 
 def main():
     """
-    Main function to let the user choose a mode and run the assistant.
+    Main function to let the user choose a knowledge base and run the assistant.
     """
     try:
-        # Initialize one LLMManager for the entire session
+        # Initialize managers
         llm_manager = LLMManager()
-        print(f"--- Unified RAG Assistant ---")
+        kb_manager = KnowledgeBaseManager()
+        
+        print(f"--- Multi-Modal RAG Assistant ---")
         print(f"Models available: {', '.join(llm_manager.models)}")
         
         while True:
-            print("\nPlease choose a mode:")
-            print("  1: Chat with Vectorbt Documentation & Codebase")
-            print("  2: Review a temporary code snippet")
+            print("\nAvailable Knowledge Bases:")
+            available_kbs = kb_manager.get_available_knowledge_bases()
+            
+            for i, kb in enumerate(available_kbs, 1):
+                status = "✅" if kb_manager.knowledge_base_exists(kb.id) else "❌"
+                print(f"  {i}: {kb.icon} {kb.name} {status}")
+                print(f"     {kb.description}")
+                if kb.supports_images:
+                    print(f"     📷 Supports images")
+            
             print("  exit: Quit the assistant")
             
-            choice = input("Enter your choice (1, 2, or exit): ").strip().lower()
+            choice = input(f"\nEnter your choice (1-{len(available_kbs)}, or exit): ").strip().lower()
 
-            if choice == '1':
-                vectorbt_mode(llm_manager=llm_manager)
-                break 
-            elif choice == '2':
-                review_mode(llm_manager=llm_manager)
+            if choice in ['exit', 'quit', 'q']:
                 break
-            elif choice in ['exit', 'quit', 'q']:
-                break
-            else:
-                print("Invalid choice. Please enter 1, 2, or exit.")
+            
+            try:
+                choice_idx = int(choice) - 1
+                if 0 <= choice_idx < len(available_kbs):
+                    selected_kb = available_kbs[choice_idx]
+                    
+                    if not kb_manager.knowledge_base_exists(selected_kb.id):
+                        print(f"❌ Knowledge base '{selected_kb.name}' is not available.")
+                        print("Please build the index first or check the configuration.")
+                        continue
+                    
+                    if selected_kb.type == KnowledgeBaseType.CODE_REVIEW:
+                        review_mode(llm_manager=llm_manager)
+                    else:
+                        load_knowledge_base(selected_kb.id, llm_manager=llm_manager)
+                    break
+                else:
+                    print("Invalid choice. Please try again.")
+            except ValueError:
+                print("Invalid choice. Please enter a number or 'exit'.")
 
     except ValueError as e:
         print(f"\nFatal Error: {e}", file=sys.stderr)

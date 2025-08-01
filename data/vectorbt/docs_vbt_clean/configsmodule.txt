@@ -1,0 +1,1 @@
+configs moduleCommon configurations for indicators. flex_col_param_config ConfigConfig for flexible column-wise parameters. flex_elem_param_config ConfigConfig for flexible element-wise parameters.

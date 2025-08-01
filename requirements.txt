@@ -22,4 +22,7 @@ huggingface-hub
 # Web scraping and environment (used by scripts)
 beautifulsoup4
 requests
-python-dotenv 
+python-dotenv
+
+# Image processing
+Pillow

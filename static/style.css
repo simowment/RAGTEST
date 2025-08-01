@@ -12,10 +12,19 @@ body {
 }
 
 .container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 20px;
+    /* overall page layout */
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+
+    /* center and slightly narrow the whole app */
+    width: 100%;
+    max-width: 980px;           /* was 1200px: make box a tad smaller */
+    margin: 0 auto;             /* center horizontally */
+    padding: 24px 20px;
+
+    /* keep background from causing horizontal scrollbars */
+    overflow-x: hidden;
 }
 
 header {
@@ -27,7 +36,7 @@ header {
 header h1 {
     font-size: 2.5rem;
     margin-bottom: 10px;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 header p {
@@ -46,7 +55,7 @@ header p {
     padding: 12px 24px;
     border: none;
     border-radius: 25px;
-    background: rgba(255,255,255,0.2);
+    background: rgba(255, 255, 255, 0.2);
     color: white;
     font-size: 1rem;
     cursor: pointer;
@@ -55,29 +64,55 @@ header p {
 }
 
 .mode-btn:hover {
-    background: rgba(255,255,255,0.3);
+    background: rgba(255, 255, 255, 0.3);
     transform: translateY(-2px);
 }
 
 .mode-btn.active {
-    background: rgba(255,255,255,0.9);
+    background: rgba(255, 255, 255, 0.9);
     color: #333;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.mode-btn:disabled {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.5);
+    cursor: not-allowed;
+    transform: none;
+}
+
+.mode-btn:disabled:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: none;
 }
 
 .main-content {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    height: 70vh;
+    gap: 18px;
+
+    /* Allow main content to grow and provide internal scrolling instead of clipping */
+    flex: 1 1 auto;
+    min-height: 0; /* critical to allow children to scroll in a flex parent */
+    max-width: 100%;
+    overflow: hidden;
+
+    /* center the grid within the container and keep it slightly narrower than container */
+    margin: 0 auto;
+    width: 100%;
 }
 
 .panel {
-    background: rgba(255,255,255,0.95);
+    background: rgba(255, 255, 255, 0.95);
     border-radius: 15px;
     padding: 20px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     backdrop-filter: blur(10px);
+
+    /* Allow inner sections to manage scrolling */
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .hidden {
@@ -104,7 +139,8 @@ header p {
     align-items: center;
 }
 
-.code-actions button, .code-actions select {
+.code-actions button,
+.code-actions select {
     padding: 6px 12px;
     border: 1px solid #ddd;
     border-radius: 6px;
@@ -131,13 +167,22 @@ header p {
 }
 
 .chat-section {
-    background: rgba(255,255,255,0.95);
-    border-radius: 15px;
-    padding: 20px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
     backdrop-filter: blur(10px);
+
     display: flex;
     flex-direction: column;
+
+    /* Ensure chat area can scroll while input remains visible */
+    min-height: 0; /* critical inside flex/grid containers */
+
+    /* center and slightly narrow chat content */
+    margin: 0 auto;
+    width: 100%;
+    max-width: 860px; /* keep chat a tad narrower inside the overall container */
 }
 
 .chat-header {
@@ -147,6 +192,20 @@ header p {
     margin-bottom: 15px;
     padding-bottom: 10px;
     border-bottom: 2px solid #f0f0f0;
+}
+
+.chat-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.kb-status {
+    font-size: 0.9rem;
+    color: #666;
+    padding: 4px 8px;
+    background: #f0f0f0;
+    border-radius: 12px;
 }
 
 .chat-header h3 {
@@ -168,10 +227,12 @@ header p {
 }
 
 .chat-messages {
-    flex: 1;
+    /* Fill available vertical space and scroll internally */
+    flex: 1 1 auto;
+    min-height: 0;           /* avoid collapsing and enable scrolling */
     overflow-y: auto;
     padding: 10px 0;
-    max-height: calc(100% - 120px);
+    /* Remove hard max-height so it cooperates with flex sizing */
 }
 
 .message {
@@ -180,8 +241,14 @@ header p {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .message.user {
@@ -211,28 +278,8 @@ header p {
     border: 1px solid #e0e0e0;
 }
 
-.message pre {
-    background: #2d3748;
-    color: #e2e8f0;
-    padding: 12px;
-    border-radius: 8px;
-    overflow-x: auto;
-    margin: 10px 0;
-    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 13px;
-    line-height: 1.4;
-}
-
-.message code {
-    background: #2d3748;
-    color: #e2e8f0;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 13px;
-}
-
 .chat-input-section {
+    /* Keep input anchored at bottom inside chat-section */
     margin-top: auto;
     padding-top: 15px;
     border-top: 1px solid #f0f0f0;
@@ -242,6 +289,77 @@ header p {
     display: flex;
     gap: 10px;
     align-items: flex-end;
+}
+
+.input-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+#image-btn {
+    width: 40px;
+    height: 40px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+#image-btn:hover {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.image-preview-container {
+    margin-bottom: 10px;
+    display: none;
+}
+
+.image-preview-container.has-images {
+    display: block;
+}
+
+.image-preview {
+    position: relative;
+    display: inline-block;
+    margin-right: 10px;
+    margin-bottom: 10px;
+}
+
+.image-preview img {
+    max-width: 150px;
+    max-height: 150px;
+    border-radius: 8px;
+    border: 2px solid #e0e0e0;
+    object-fit: cover;
+}
+
+.image-preview .remove-image {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ff4757;
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.image-preview .remove-image:hover {
+    background: #ff3742;
 }
 
 #question-input {
@@ -277,7 +395,7 @@ header p {
     transition: all 0.3s ease;
     font-size: 18px;
     position: relative;
-    overflow: visible; /* Allow loader to extend beyond button */
+    overflow: visible;
 }
 
 .small-loader {
@@ -292,7 +410,7 @@ header p {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.2); /* Add slight background for better visibility */
+    background: rgba(0, 0, 0, 0.2);
 }
 
 #send-btn.loading .small-loader {
@@ -314,31 +432,6 @@ header p {
     transform: none;
 }
 
-.loading {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    color: white;
-}
-
-.spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid rgba(255,255,255,0.3);
-    border-top: 4px solid white;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 20px;
-}
-
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
@@ -347,41 +440,213 @@ header p {
 /* Mode spécifique - VectorBT */
 .vectorbt-mode .main-content {
     grid-template-columns: 1fr;
+    /* center single column and keep width pleasant */
+    margin: 0 auto;
+    max-width: 860px;
 }
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.loading-overlay.visible {
+    opacity: 1;
+}
+
+.loading-content {
+    background: white;
+    padding: 40px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    max-width: 400px;
+    width: 90%;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+.loading-message {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.loading-submessage {
+    font-size: 14px;
+    color: #666;
+    font-style: italic;
+}
+
+/* Code Blocks: robust, responsive, scrollable with optional wrap */
+:root{
+    --code-bg: #0f172a; /* slate-900 */
+    --code-fg: #e5e7eb; /* gray-200 */
+    --code-border: #334155; /* slate-700 */
+    --code-inline-bg:#f1f3f4;
+    --code-inline-fg:#d73a49;
+}
+
+pre, code { box-sizing: border-box; }
+
+/* Container to avoid stretching and preserve spacing */
+.message .message-content pre {
+    max-width: 100%;
+}
+
+/* Block code styling */
+pre {
+    margin: 16px 0;
+    padding: 14px 16px;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    border-radius: 8px;
+    border: 1px solid var(--code-border);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow: auto;              /* both axes if needed */
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: pre;            /* default: no wrap */
+    word-wrap: normal;
+    scrollbar-gutter: stable both-edges;
+    width: 100%;
+}
+
+/* Wrapped mode (can be toggled via JS by adding .is-wrapped to pre) */
+pre.is-wrapped {
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    overflow-y: auto; /* allow vertical when wrapped */
+}
+
+/* Ensure code inherits and fills block */
+pre code {
+    display: block;
+    background: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    white-space: inherit;
+    width: 100%;
+}
+
+/* Support Prism or HLJS themes without breaking whitespace */
+pre code[class*="language-"],
+code[class*="language-"] {
+    background: transparent;
+}
+
+/* Inline code */
+.inline-code, :not(pre) > code {
+    background: var(--code-inline-bg);
+    color: var(--code-inline-fg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.9em;
+    border: 1px solid #e1e4e8;
+    word-break: break-word;
+}
+
+/* Ensure message content doesn't stretch */
+.message-content {
+    max-width: 80%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Optional header/buttons if present */
+.code-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:.5rem .75rem;
+    background: rgba(255,255,255,0.04);
+    border-bottom:1px solid rgba(255,255,255,0.06);
+    border-top-left-radius:8px;
+    border-top-right-radius:8px;
+}
+
+.code-header .code-lang {
+    font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif;
+    font-size:.8rem;
+    opacity:.8;
+    color:#e5e7eb;
+}
+
+.code-header .code-action-btn {
+    font: inherit;
+    font-size:.8rem;
+    padding:.25rem .5rem;
+    border-radius:4px;
+    border:1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.06);
+    color: #e5e7eb;
+    cursor: pointer;
+}
+.code-header .code-action-btn:hover { background: rgba(255,255,255,0.12); }
 
 /* Responsive */
 @media (max-width: 768px) {
     .container {
-        padding: 10px;
+        padding: 12px;
+        max-width: 100%;
     }
-    
+
     .main-content {
         grid-template-columns: 1fr;
         height: auto;
-        gap: 15px;
+        gap: 14px;
+        margin: 0 auto;
+        max-width: 100%;
     }
-    
-    .panel, .chat-section {
+
+    .panel,
+    .chat-section {
         height: 400px;
+        max-width: 100%;
+        margin: 0 auto;
     }
-    
+
     header h1 {
         font-size: 2rem;
     }
-    
+
     .mode-selector {
         flex-direction: column;
         align-items: center;
     }
-    
+
     .mode-btn {
         width: 100%;
         max-width: 300px;
     }
-}
 
-/* Auto-resize textarea */
-.auto-resize {
-    overflow: hidden;
-    resize: none;
+    /* Slightly smaller monospace on small screens to reduce horizontal scroll */
+    pre {
+        font-size: 12px;
+    }
 }
